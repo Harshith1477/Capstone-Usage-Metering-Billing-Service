@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Plan {
+  id            Int    @id @default(autoincrement())
+  name          String @unique
+  apiCallLimit  Int    @map("api_call_limit")
+  aiTokenLimit  Int    @map("ai_token_limit")
+  priceCents    Int    @map("price_cents")
+  stripePriceId String? @map("stripe_price_id")
+
+  tenants Tenant[]
+
+  @@map("plans")
+}
+
+model Tenant {
+  id                 String   @id @default(uuid()) @db.Uuid
+  name               String
+  email              String   @unique
+  planId             Int      @map("plan_id")
+  stripeCustomerId   String?  @unique @map("stripe_customer_id")
+  subscriptionStatus String   @default("inactive") @map("subscription_status")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  plan          Plan           @relation(fields: [planId], references: [id])
+  usageEvents   UsageEvent[]
+  subscriptions Subscription[]
+
+  @@map("tenants")
+}
+
+model Subscription {
+  id                   String    @id @default(uuid()) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  stripeSubscriptionId String    @unique @map("stripe_subscription_id")
+  status               String
+  currentPeriodStart   DateTime  @map("current_period_start")
+  currentPeriodEnd     DateTime  @map("current_period_end")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model UsageEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  eventType      String   @map("event_type")
+  quantity       Int
+  idempotencyKey String   @map("idempotency_key")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, idempotencyKey])
+  @@map("usage_events")
+}
+
+model WebhookEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  stripeEventId String    @unique @map("stripe_event_id")
+  eventType     String    @map("event_type")
+  processedAt   DateTime  @default(now()) @map("processed_at")
+
+  @@map("webhook_events")
+}
